@@ -61,8 +61,8 @@ def data_review(df):
   return info, datatypes
 
 
-data_path = Path('online_classroom_data.csv')
-data = load_data(data_path)
+# data_path = Path('online_classroom_data.csv')
+data = load_data('https://raw.githubusercontent.com/iampujan/e-learning-streamlit/main/online_classroom_data.csv')
 info, datatypes = data_review(data)
 
 # Create a button to choose between head and tail
