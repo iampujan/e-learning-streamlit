@@ -22,10 +22,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from xgboost import XGBClassifier
-
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 
 st.set_page_config(layout="wide")
-
 
 # Title of the app
 st.title("E-Learning Student Reactions")
@@ -360,7 +360,6 @@ if st.button("Generate Pearson Correlation Heatmap"):
 
 # Elbow Curve
 
-
 class DataFrameSelector(BaseEstimator, TransformerMixin):
     def __init__(self, attribute_names):
         """
@@ -460,6 +459,7 @@ xg = XGBClassifier()
 # Initialize StratifiedKFold with 10 splits, shuffling, and random state.
 kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
 
+
 def build_model(model_init, kf, X_train, y_train):
     """
     Build and evaluate a machine learning model using cross-validated predictions.
@@ -552,7 +552,6 @@ def generate_elbow_curve(n_clusters):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(n_clusters), y=wcss_values, mode="lines+markers"))
     fig.update_layout(
-        title="Elbow Curve",
         xaxis_title="Number of Clusters(k)",
         yaxis_title="Within-Cluster Sum of Squares (WCSS)",
         shapes=[
@@ -570,8 +569,64 @@ def generate_elbow_curve(n_clusters):
 
 
 # Generate and display the elbow curve
-st.write("### Elbow Curve")
+st.write("### Elbow Curve to find the optimal number of clusters")
 n_clusters = range(1, 11)
 fig = generate_elbow_curve(n_clusters)
 st.plotly_chart(fig, use_container_width=True)
+
+
+# Kmeans Clustering
+
+# Apply KMeans clustering based on the optimal value of k = 2.
+kmeans = KMeans(n_clusters=2, random_state=1, n_init=10)
+
+# Assign cluster labels to each data point.
+X_t["Cluster_KMeans"] = kmeans.fit_predict(X_t)
+
+
+# Define the Streamlit app
+def kmeans_cluster_viz():
+    st.title("KMeans Clustering Visualization")
+
+    # Print cluster counts
+    st.subheader("Cluster Counts:")
+    st.write(X_t["Cluster_KMeans"].value_counts())
+
+    # Drop the 'Cluster_KMeans' column to revert to the original data frame without the clustering label
+    X_t.drop(columns=["Cluster_KMeans"], inplace=True)
+
+    # Apply PCA to reduce dimensionality for visualization
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_t)
+
+    # Create a DataFrame for visualization
+    df_vis = pd.DataFrame(
+        {"PC1": X_pca[:, 0], "PC2": X_pca[:, 1], "Cluster": kmeans.labels_}
+    )
+
+    # Visualize with Plotly
+    fig = px.scatter(
+        df_vis,
+        x="PC1",
+        y="PC2",
+        color="Cluster",
+        title="KMeans Clustering with Centroids",
+        labels={"PC1": "Principal Component 1", "PC2": "Principal Component 2"},
+        color_continuous_scale="viridis",
+    )
+
+    # Add centroids to the plot
+    centroids = pca.transform(kmeans.cluster_centers_)
+    fig.add_scatter(
+        x=centroids[:, 0],
+        y=centroids[:, 1],
+        mode="markers",
+        marker=dict(size=14, color="red", symbol="x"),
+    )
+
+    return fig
+
+
+kmeans_viz = kmeans_cluster_viz()
+st.plotly_chart(kmeans_viz)
 
