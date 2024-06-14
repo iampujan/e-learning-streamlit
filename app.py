@@ -2,7 +2,8 @@ import pandas as pd
 import streamlit as st
 from pathlib import Path
 import io
-from scipy import stats
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
 import plotly.figure_factory as ff
 import plotly.express as px
 import plotly.subplots as sp
@@ -13,6 +14,14 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import StratifiedKFold
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from xgboost import XGBClassifier
 
 
 st.set_page_config(layout="wide")
@@ -37,48 +46,49 @@ def load_data(filepath):
     return data
 
 
-
 def data_review(df):
-  '''
-  Extract information about the dataframe.
+    """
+    Extract information about the dataframe.
 
-  Args:
-    df (A Panda's data frame): It contains the data.
+    Args:
+      df (A Panda's data frame): It contains the data.
 
-  Returns:
-    info (A Panda's dictionary): It contains information such as the number of columns, number of rows, and counts of missing and duplicate values in the data.
-    datatypes (A list): It contains columns and their respective data types.
-  '''
+    Returns:
+      info (A Panda's dictionary): It contains information such as the number of columns, number of rows, and counts of missing and duplicate values in the data.
+      datatypes (A list): It contains columns and their respective data types.
+    """
 
-  info = {
-      'Number of Rows': df.shape[0],
-      'Number of Columns': df.shape[1],
-      'Missing Values': df.isnull().sum().sum(),
-      'Duplicate Values': df.duplicated().sum(),
-  }
+    info = {
+        "Number of Rows": df.shape[0],
+        "Number of Columns": df.shape[1],
+        "Missing Values": df.isnull().sum().sum(),
+        "Duplicate Values": df.duplicated().sum(),
+    }
 
-  # Create a in-memory buffer to capture the output.
-  buffer = io.StringIO()
-  df.info(buf=buffer)
+    # Create a in-memory buffer to capture the output.
+    buffer = io.StringIO()
+    df.info(buf=buffer)
 
-  # Get the content of the buffer.
-  datatypes = buffer.getvalue()
+    # Get the content of the buffer.
+    datatypes = buffer.getvalue()
 
-  return info, datatypes
+    return info, datatypes
 
 
-# data_path = Path('online_classroom_data.csv')
+# data_path = Path("online_classroom_data.csv")
 data = load_data('https://raw.githubusercontent.com/iampujan/e-learning-streamlit/main/online_classroom_data.csv')
 info, datatypes = data_review(data)
 
 # Create a button to choose between head and tail
-choose = st.selectbox('Choose:', ['Head', 'Tail'])
+choose = st.selectbox("Choose:", ["Head", "Tail"])
 
 # Create a slider to select the number of rows
-num_rows = st.slider('Select number of rows:', min_value=1, max_value=len(data), value=5, step=1)
+num_rows = st.slider(
+    "Select number of rows:", min_value=1, max_value=len(data), value=5, step=1
+)
 
 # Use the button and slider to decide whether to display head or tail
-if choose == 'Head':
+if choose == "Head":
     if len(data) >= num_rows:
         st.write("### Head Data")
         st.dataframe(data.head(num_rows))
@@ -90,8 +100,6 @@ else:
         st.dataframe(data.tail(num_rows))
     else:
         st.write(f"The data has fewer than {num_rows} rows.")
-
-
 
 
 # Data Preprocessing
@@ -138,31 +146,33 @@ cols = [
     "Approved",
 ]
 
+
 def generate_histogram(data, cols):
-  hist_fig = sp.make_subplots(rows=3, cols=5, subplot_titles=cols)
+    hist_fig = sp.make_subplots(rows=3, cols=5, subplot_titles=cols)
 
-  for i, col in enumerate(cols):
-      row = i // 5 + 1
-      col_num = i % 5 + 1
-      # Histogram
-      hist_fig.add_trace(
-          go.Histogram(
-              x=data[col],
-              nbinsx=30,
-              name=col,
-              histnorm="probability density",
-          ),
-          row=row,
-          col=col_num,
-      )
+    for i, col in enumerate(cols):
+        row = i // 5 + 1
+        col_num = i % 5 + 1
+        # Histogram
+        hist_fig.add_trace(
+            go.Histogram(
+                x=data[col],
+                nbinsx=30,
+                name=col,
+                histnorm="probability density",
+            ),
+            row=row,
+            col=col_num,
+        )
 
-  hist_fig.update_layout(
-      height=800,
-      width=1000,
-      title_text="Univariate Analysis - Histograms",
-      showlegend=False,
-  )
-  return hist_fig
+    hist_fig.update_layout(
+        height=800,
+        width=1000,
+        title_text="Univariate Analysis - Histograms",
+        showlegend=False,
+    )
+    return hist_fig
+
 
 hist_fig = generate_histogram(preprocessed_data, cols)
 st.plotly_chart(hist_fig, use_container_width=True)
@@ -170,30 +180,30 @@ st.plotly_chart(hist_fig, use_container_width=True)
 
 # QQ Plots
 def generate_qq_plots(data, cols):
-  # Create a figure with subplots for QQ plots
-  fig, axes = plt.subplots(3, 5, figsize=(10, 6))
+    # Create a figure with subplots for QQ plots
+    fig, axes = plt.subplots(3, 5, figsize=(10, 6))
 
-  # Generate QQ plots for each column
-  for i, ax in enumerate(axes.flat):
-      sm.qqplot(data=data[cols[i]], ax=ax, line='45')
+    # Generate QQ plots for each column
+    for i, ax in enumerate(axes.flat):
+        sm.qqplot(data=data[cols[i]], ax=ax, line="45")
 
-      # Set title for each subplot
-      ax.set_title(f'{cols[i]}', pad=10, fontsize=8)
+        # Set title for each subplot
+        ax.set_title(f"{cols[i]}", pad=10, fontsize=8)
 
-      # Remove labels and ticks for clarity
-      ax.set_xticklabels('')
-      ax.set_yticklabels('')
-      ax.tick_params(axis='both', which='both', bottom=False, left=False)
-      ax.set_xlabel('')
-      ax.set_ylabel('')
-  return fig
+        # Remove labels and ticks for clarity
+        ax.set_xticklabels("")
+        ax.set_yticklabels("")
+        ax.tick_params(axis="both", which="both", bottom=False, left=False)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+    return fig
+
 
 # Display the QQ plot in Streamlit
-fig = generate_qq_plots(preprocessed_data,cols)
+fig = generate_qq_plots(preprocessed_data, cols)
 # Adjust layout
 plt.tight_layout()
 st.pyplot(fig)
-
 
 
 # Bivariate Analysis
@@ -388,9 +398,6 @@ class DataFrameSelector(BaseEstimator, TransformerMixin):
         return X[self.attribute_names]
 
 
-# Fit and transform the training data using the pipeline.
-from sklearn.model_selection import train_test_split
-
 # Split the dataset into training and testing sets.
 data = preprocessed_data.copy()
 
@@ -443,11 +450,6 @@ pipeline = Pipeline(
 
 X_train = pipeline.fit_transform(X_train)
 
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import AdaBoostClassifier
-from xgboost import XGBClassifier
-
 # Create instances of the classifiers.
 rf = RandomForestClassifier()
 ab = AdaBoostClassifier()
@@ -455,14 +457,8 @@ dt = DecisionTreeClassifier()
 xg = XGBClassifier()
 
 
-from sklearn.model_selection import StratifiedKFold
-
 # Initialize StratifiedKFold with 10 splits, shuffling, and random state.
 kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-
-from sklearn.metrics import accuracy_score, classification_report
-from sklearn.model_selection import cross_val_predict
-
 
 def build_model(model_init, kf, X_train, y_train):
     """
@@ -532,7 +528,9 @@ metrics_data = generate_metrics_df(models)
 models_df = pd.DataFrame(metrics_data)
 
 # Create a table in Streamlit.
-st.write("### Classification Metrics using stratified KFold Cross-Validation with 10 folds")
+st.write(
+    "### Classification Metrics using stratified KFold Cross-Validation with 10 folds"
+)
 st.write(models_df)
 
 # Transform the entire dataset using the pipeline.
